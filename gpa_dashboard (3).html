@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>이영준 — 성적 분석 대시보드</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+:root {
+  --bg: #0B1120; --surface: #111827; --surface-light: #1a2332;
+  --border: #1e3a50; --text: #E2E8F0; --text-muted: #64748B; --text-dim: #475569;
+  --overall: #94A3B8; --biz: #3B82F6; --biz-light: #60A5FA;
+  --ds: #10B981; --ds-glow: #34D399; --ds-bright: #6EE7B7;
+  --accent: #F59E0B; --grid: #1e293b;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: var(--bg); color: var(--text); font-family: 'Noto Sans KR', sans-serif; min-height: 100vh; }
+.mono { font-family: 'DM Mono', monospace; }
+.wrap { max-width: 1200px; margin: 0 auto; padding: 0 40px; }
+
+/* Canvas container - THIS IS THE KEY FIX */
+.chart-container { position: relative; width: 100%; }
+
+.header { padding-top: 40px; opacity: 0; animation: fadeUp .8s .1s cubic-bezier(.16,1,.3,1) forwards; }
+.header-row { display: flex; align-items: flex-end; justify-content: space-between; flex-wrap: wrap; gap: 16px; }
+.header .label { font-size: 11px; color: var(--ds); letter-spacing: .15em; font-weight: 600; text-transform: uppercase; margin-bottom: 8px; }
+.header h1 { font-size: 32px; font-weight: 900; line-height: 1.2; background: linear-gradient(135deg, var(--text) 0%, var(--ds-glow) 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.header .sub { font-size: 13px; color: var(--text-muted); margin-top: 6px; }
+.badge { display: flex; align-items: center; gap: 6px; padding: 6px 14px; background: rgba(16,185,129,.1); border: 1px solid rgba(16,185,129,.25); border-radius: 20px; font-size: 12px; color: var(--ds-glow); font-weight: 500; }
+.badge::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--ds); }
+
+.kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-top: 28px; }
+.kpi { background: linear-gradient(135deg, var(--surface) 0%, var(--surface-light) 100%); border: 1px solid var(--border); border-radius: 16px; padding: 24px 20px; position: relative; overflow: hidden; opacity: 0; transform: translateY(20px); transition: all .7s cubic-bezier(.16,1,.3,1); }
+.kpi.show { opacity: 1; transform: translateY(0); }
+.kpi::after { content: ''; position: absolute; top: -20px; right: -20px; width: 80px; height: 80px; border-radius: 50%; opacity: .06; filter: blur(20px); }
+.kpi .kpi-label { font-size: 12px; color: var(--text-muted); letter-spacing: .08em; text-transform: uppercase; margin-bottom: 8px; font-weight: 500; }
+.kpi .kpi-val { font-size: 36px; font-weight: 700; line-height: 1.1; }
+.kpi .kpi-sub { font-size: 12px; color: var(--text-dim); margin-top: 6px; }
+
+.tab-bar { display: flex; gap: 4px; background: var(--surface); border-radius: 12px; padding: 4px; border: 1px solid var(--border); width: fit-content; margin-top: 28px; }
+.tab-btn { padding: 10px 20px; border: 1px solid transparent; border-radius: 8px; cursor: pointer; font-size: 13px; font-weight: 600; font-family: inherit; background: transparent; color: var(--text-muted); transition: all .3s; }
+.tab-btn.active { background: linear-gradient(135deg, rgba(16,185,129,.12), rgba(16,185,129,.06)); color: var(--ds-glow); border-color: rgba(16,185,129,.25); }
+
+.panel { display: none; margin-top: 20px; }
+.panel.active { display: block; }
+.chart-card { background: linear-gradient(180deg, var(--surface) 0%, var(--bg) 100%); border: 1px solid var(--border); border-radius: 20px; padding: 32px 24px 20px; position: relative; overflow: hidden; }
+.chart-card .glow { position: absolute; top: 0; left: 25%; right: 0; bottom: 0; background: linear-gradient(135deg, transparent 0%, rgba(16,185,129,.012) 50%, transparent 100%); pointer-events: none; }
+.chart-card h2 { font-size: 18px; font-weight: 700; margin: 0; }
+.chart-card .desc { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+.chart-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
+.legend { display: flex; gap: 16px; font-size: 12px; }
+.legend-item { display: flex; align-items: center; gap: 6px; color: var(--text-muted); }
+.legend-line { width: 12px; height: 3px; border-radius: 2px; }
+.legend-dot { width: 10px; height: 10px; border-radius: 50%; }
+.chart-footer { display: flex; gap: 20px; justify-content: center; margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); flex-wrap: wrap; font-size: 11px; color: var(--text-muted); text-align: center; }
+
+.ds-grid { display: grid; grid-template-columns: 1fr 320px; gap: 20px; }
+.side-card { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 24px; }
+.side-label { font-size: 12px; color: var(--text-muted); letter-spacing: .08em; text-transform: uppercase; margin-bottom: 12px; }
+.gauge-wrap { position: relative; width: 160px; height: 100px; margin: 0 auto; }
+.gauge-num { position: absolute; bottom: 0; left: 50%; transform: translateX(-50%); text-align: center; }
+.gauge-num .big { font-size: 32px; font-weight: 900; color: var(--ds); line-height: 1; }
+.gauge-num .small { font-size: 11px; color: var(--text-muted); }
+.progress-row { margin-bottom: 12px; }
+.progress-head { display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 4px; }
+.progress-track { height: 6px; background: var(--grid); border-radius: 3px; overflow: hidden; }
+.progress-fill { height: 100%; border-radius: 3px; transition: width 1s cubic-bezier(.16,1,.3,1); }
+.highlight-card { background: linear-gradient(135deg, rgba(16,185,129,.06), rgba(16,185,129,.02)); border: 1px solid rgba(16,185,129,.2); border-radius: 20px; padding: 24px; }
+.highlight-title { font-size: 12px; color: var(--ds); letter-spacing: .08em; text-transform: uppercase; margin-bottom: 12px; font-weight: 600; }
+.highlight-item { font-size: 13px; margin-bottom: 8px; display: flex; align-items: center; gap: 8px; }
+.highlight-item::before { content: '●'; color: var(--ds); font-size: 8px; }
+
+.comp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.comp-card { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 32px 24px 20px; }
+.summary-bar { grid-column: 1 / -1; background: linear-gradient(135deg, var(--surface) 0%, rgba(16,185,129,.03) 100%); border: 1px solid var(--border); border-radius: 20px; padding: 28px 32px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 32px; text-align: center; }
+.summary-bar .s-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .08em; margin-bottom: 6px; }
+.summary-bar .s-val { font-size: 28px; font-weight: 900; }
+.summary-bar .s-sub { font-size: 11px; color: var(--text-dim); }
+
+.footer { text-align: center; padding: 16px 40px 32px; font-size: 11px; color: var(--text-dim); }
+
+@keyframes fadeUp { from { opacity: 0; transform: translateY(-10px); } to { opacity: 1; transform: none; } }
+
+@media (max-width: 900px) {
+  .ds-grid, .comp-grid { grid-template-columns: 1fr; }
+  .summary-bar { grid-template-columns: repeat(2, 1fr); }
+  .wrap { padding: 0 20px; }
+}
+</style>
+</head>
+<body>
+
+<div class="wrap header">
+  <div class="header-row">
+    <div>
+      <div class="label">Academic Performance Dashboard</div>
+      <h1>이영준 — 성적 분석 대시보드</h1>
+      <div class="sub">경영학전공 · 데이터사이언스 복수전공 &nbsp;|&nbsp; 총 139학점 &nbsp;|&nbsp; 전체 평점 3.92 / 4.5</div>
+    </div>
+    <div class="badge">DS 대학원 포트폴리오</div>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="kpi-grid">
+    <div class="kpi" data-delay="100"><div class="kpi-label">◈ 2022 이후 전체</div><div class="kpi-val mono" style="color:var(--overall)" data-target="4.23">0.00</div><div class="kpi-sub">/ 4.5 만점</div></div>
+    <div class="kpi" data-delay="200"><div class="kpi-label">◆ 경영학 전공</div><div class="kpi-val mono" style="color:var(--biz)" data-target="4.25">0.00</div><div class="kpi-sub">2022 이후 평점</div></div>
+    <div class="kpi" data-delay="300"><div class="kpi-label">◇ DS 복수전공</div><div class="kpi-val mono" style="color:var(--ds)" data-target="4.29">0.00</div><div class="kpi-sub">복기+복수 평점</div></div>
+    <div class="kpi" data-delay="400"><div class="kpi-label">★ DS A+ 비율</div><div class="kpi-val mono" style="color:var(--accent)" data-target="71" data-dec="0">0</div><div class="kpi-sub">10/14과목</div></div>
+    <div class="kpi" data-delay="500"><div class="kpi-label">▣ DS 평균 점수</div><div class="kpi-val mono" style="color:var(--ds-glow)" data-target="95.6" data-dec="1">0.0</div><div class="kpi-sub">백분율 기준</div></div>
+  </div>
+</div>
+
+<div class="wrap">
+  <div class="tab-bar">
+    <button class="tab-btn active" data-tab="trend">📈 GPA 추이</button>
+    <button class="tab-btn" data-tab="ds">🧬 DS 전공</button>
+    <button class="tab-btn" data-tab="composition">📊 구성 분석</button>
+  </div>
+</div>
+
+<div class="wrap" style="padding-bottom:40px;">
+
+  <!-- TREND -->
+  <div class="panel active" id="panel-trend">
+    <div class="chart-card">
+      <div class="glow"></div>
+      <div class="chart-head">
+        <div><h2>학기별 평점 추이</h2><p class="desc">전체 · 경영학 · 데이터사이언스 — 2019-1 ~ 2025-2 (2020~2021 제외)</p></div>
+        <div class="legend">
+          <div class="legend-item"><div class="legend-line" style="background:var(--overall)"></div>전체</div>
+          <div class="legend-item"><div class="legend-line" style="background:var(--biz)"></div>경영학</div>
+          <div class="legend-item"><div class="legend-line" style="background:var(--ds)"></div>DS</div>
+        </div>
+      </div>
+      <div class="chart-container" style="height:380px;"><canvas id="chartTrend"></canvas></div>
+      <div class="chart-footer">
+        <div>전체 평점 상승 <span class="mono" style="color:var(--overall);font-weight:700">2.57 → 4.50</span></div>
+        <div>2022 이후 최저 <span class="mono" style="color:var(--accent);font-weight:700">3.91</span></div>
+        <div>DS 전공 최고 <span class="mono" style="color:var(--ds);font-weight:700">4.50</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- DS -->
+  <div class="panel" id="panel-ds">
+    <div class="ds-grid">
+      <div class="chart-card" style="padding:32px 24px 20px">
+        <h2>DS 전공 과목별 성적</h2>
+        <p class="desc" style="margin-bottom:20px">백분율 점수 기준 · 2022-2 ~ 2025-2</p>
+        <div class="chart-container" style="height:520px;"><canvas id="chartDS"></canvas></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:16px">
+        <div class="side-card" style="text-align:center">
+          <div class="side-label">DS 전공 누적 평점</div>
+          <div class="gauge-wrap">
+            <svg width="160" height="100" viewBox="0 0 160 100">
+              <defs><linearGradient id="gg" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#3B82F6"/><stop offset="100%" stop-color="#10B981"/></linearGradient></defs>
+              <path d="M 15 90 A 65 65 0 0 1 145 90" fill="none" stroke="#1e293b" stroke-width="10" stroke-linecap="round"/>
+              <path d="M 15 90 A 65 65 0 0 1 145 90" fill="none" stroke="url(#gg)" stroke-width="10" stroke-linecap="round" stroke-dasharray="194.5 204"/>
+            </svg>
+            <div class="gauge-num"><div class="big mono">4.29</div><div class="small">/ 4.5</div></div>
+          </div>
+        </div>
+        <div class="side-card">
+          <div class="side-label">성적 등급 분포</div>
+          <div class="progress-row"><div class="progress-head"><span style="color:var(--text-muted)">A+</span><span class="mono" style="color:var(--ds);font-weight:700">10과목</span></div><div class="progress-track"><div class="progress-fill" style="width:71.4%;background:var(--ds)"></div></div></div>
+          <div class="progress-row"><div class="progress-head"><span style="color:var(--text-muted)">A</span><span class="mono" style="color:var(--ds-glow);font-weight:700">2과목</span></div><div class="progress-track"><div class="progress-fill" style="width:14.3%;background:var(--ds-glow)"></div></div></div>
+          <div class="progress-row"><div class="progress-head"><span style="color:var(--text-muted)">B+</span><span class="mono" style="color:var(--ds-bright);font-weight:700">2과목</span></div><div class="progress-track"><div class="progress-fill" style="width:14.3%;background:var(--ds-bright)"></div></div></div>
+        </div>
+        <div class="highlight-card">
+          <div class="highlight-title">✦ Key Highlights</div>
+          <div class="highlight-item">14과목 중 10과목 A+ 취득</div>
+          <div class="highlight-item">100점 만점 과목 3개</div>
+          <div class="highlight-item">평균 백분율 95.6점</div>
+          <div class="highlight-item">전 학기 평점 3.75 이상 유지</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- COMPOSITION -->
+  <div class="panel" id="panel-composition">
+    <div class="comp-grid">
+      <div class="comp-card">
+        <h2 style="font-size:18px;font-weight:700">학기별 수강 학점 구성</h2>
+        <p class="desc" style="margin-bottom:16px">교양 → 경영학 → DS 전공으로 비중 전환</p>
+        <div class="chart-container" style="height:300px;"><canvas id="chartCredit"></canvas></div>
+        <div class="legend" style="justify-content:center;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+          <div class="legend-item"><div class="legend-dot" style="background:var(--text-dim);opacity:.4"></div>교양</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--biz)"></div>경영학</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--ds)"></div>DS</div>
+        </div>
+      </div>
+      <div class="comp-card">
+        <h2 style="font-size:18px;font-weight:700">전공별 성적 등급 비교</h2>
+        <p class="desc" style="margin-bottom:16px">경영학 vs 데이터사이언스</p>
+        <div class="chart-container" style="height:300px;"><canvas id="chartGrade"></canvas></div>
+        <div class="legend" style="justify-content:center;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+          <div class="legend-item"><div class="legend-dot" style="background:var(--biz)"></div>경영학 (17과목)</div>
+          <div class="legend-item"><div class="legend-dot" style="background:var(--ds)"></div>DS (14과목)</div>
+        </div>
+      </div>
+      <div class="summary-bar">
+        <div><div class="s-label">전체 이수학점</div><div class="s-val mono" style="color:var(--text)">139</div><div class="s-sub">졸업기준 130학점</div></div>
+        <div><div class="s-label">전체 평점평균</div><div class="s-val mono" style="color:var(--overall)">3.92</div><div class="s-sub">백분율 93.3%</div></div>
+        <div><div class="s-label">경영학 전공</div><div class="s-val mono" style="color:var(--biz)">3.94</div><div class="s-sub">전기+전선 57학점</div></div>
+        <div><div class="s-label">DS 복수전공</div><div class="s-val mono" style="color:var(--ds)">4.28</div><div class="s-sub">복기+복수 42학점</div></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="footer">이영준 · 한세대학교 글로벌경영학부 경영학전공 / 데이터사이언스 복수전공 · 2026.02 기준</div>
+
+<script>
+/* ══ Chart.js Global Config ══ */
+Chart.defaults.color = '#64748B';
+Chart.defaults.font.family = "'Noto Sans KR', sans-serif";
+Chart.defaults.font.size = 11;
+Chart.defaults.plugins.legend.display = false;
+Chart.defaults.plugins.tooltip.backgroundColor = 'rgba(11,17,32,0.95)';
+Chart.defaults.plugins.tooltip.borderColor = '#1e3a50';
+Chart.defaults.plugins.tooltip.borderWidth = 1;
+Chart.defaults.plugins.tooltip.cornerRadius = 12;
+Chart.defaults.plugins.tooltip.padding = 14;
+Chart.defaults.plugins.tooltip.titleFont = { family: "'Noto Sans KR'", size: 11, weight: '600' };
+Chart.defaults.plugins.tooltip.bodyFont = { family: "'DM Mono', monospace", size: 13 };
+Chart.defaults.scale.grid = { color: '#1e293b', lineWidth: 1 };
+
+var labels = ["'19-1","'19-2","'22-1","'22-2","'23-1","'23-2","'25-1","'25-2"];
+
+/* ══ CHART 1: GPA Trend ══ */
+var ctxTrend = document.getElementById('chartTrend').getContext('2d');
+var dsGrad = ctxTrend.createLinearGradient(0, 0, 0, 380);
+dsGrad.addColorStop(0, 'rgba(16,185,129,0.15)');
+dsGrad.addColorStop(1, 'rgba(16,185,129,0)');
+
+new Chart(ctxTrend, {
+  type: 'line',
+  data: {
+    labels: labels,
+    datasets: [
+      {
+        label: 'DS', data: [null, null, null, 4.50, 3.75, 4.38, 4.50, 4.50],
+        borderColor: '#10B981', borderWidth: 3, pointBackgroundColor: '#0B1120',
+        pointBorderColor: '#10B981', pointBorderWidth: 2.5, pointRadius: 6, pointHoverRadius: 8,
+        fill: true, backgroundColor: dsGrad, tension: 0.3, spanGaps: false, order: 1,
+      },
+      {
+        label: '전체', data: [2.57, 3.58, 4.25, 4.41, 3.91, 4.17, 4.50, 4.17],
+        borderColor: '#94A3B8', borderWidth: 2.5, pointBackgroundColor: '#0B1120',
+        pointBorderColor: '#94A3B8', pointBorderWidth: 2.5, pointRadius: 5, pointHoverRadius: 7,
+        fill: false, tension: 0.3, order: 2,
+      },
+      {
+        label: '경영학', data: [2.83, 3.50, 4.38, 4.50, 4.00, 3.75, null, null],
+        borderColor: '#3B82F6', borderWidth: 2.5, pointBackgroundColor: '#0B1120',
+        pointBorderColor: '#3B82F6', pointBorderWidth: 2.5, pointRadius: 5, pointHoverRadius: 7,
+        fill: false, tension: 0.3, spanGaps: false, order: 3,
+      },
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      y: { min: 2.0, max: 4.7, ticks: { stepSize: 0.5 }, border: { display: false } },
+      x: { grid: { display: false }, border: { display: false } }
+    },
+    plugins: {
+      tooltip: {
+        callbacks: {
+          label: function(ctx) { return ctx.dataset.label + ': ' + (ctx.parsed.y !== null ? ctx.parsed.y.toFixed(2) : '-'); }
+        }
+      }
+    },
+    interaction: { mode: 'index', intersect: false },
+  },
+  plugins: [{
+    id: 'refLines',
+    afterDraw: function(chart) {
+      var ctx = chart.ctx, xScale = chart.scales.x, yScale = chart.scales.y;
+      var x22 = xScale.getPixelForValue(2);
+      ctx.save(); ctx.setLineDash([6, 4]); ctx.strokeStyle = 'rgba(16,185,129,0.4)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(x22, yScale.top); ctx.lineTo(x22, yScale.bottom); ctx.stroke(); ctx.restore();
+      ctx.save(); ctx.font = "11px 'Noto Sans KR'"; ctx.fillStyle = 'rgba(16,185,129,0.6)';
+      ctx.fillText('복수전공 시작 →', x22 + 6, yScale.top + 16); ctx.restore();
+      var y45 = yScale.getPixelForValue(4.5);
+      ctx.save(); ctx.setLineDash([4, 4]); ctx.strokeStyle = 'rgba(245,158,11,0.2)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(xScale.left, y45); ctx.lineTo(xScale.right, y45); ctx.stroke(); ctx.restore();
+      ctx.save(); ctx.font = "10px 'Noto Sans KR'"; ctx.fillStyle = 'rgba(245,158,11,0.4)'; ctx.textAlign = 'right';
+      ctx.fillText('만점 4.5', xScale.right, y45 - 4); ctx.restore();
+    }
+  }]
+});
+
+/* ══ CHART 2: DS Courses Bar ══ */
+var dsNames = ["R프로그래밍","파이썬프로그래밍","데이터수집과클리닝","데이터분석기초통계","데이터베이스기초","정보검색과AI학습응용","데이터분석기획론","데이터시각화","R머신러닝응용","시계열데이터분석","캡스톤디자인(DS)I","데이터사이언스개론","영상데이터분석","고급데이터시각화"];
+var dsScores = [95,85,89,91,99,94,95,99,100,95,99,99,98,100];
+var dsColors = dsScores.map(function(s) { return s >= 98 ? '#10B981' : s >= 94 ? '#34D399' : s >= 90 ? 'rgba(110,231,183,0.73)' : 'rgba(110,231,183,0.47)'; });
+var dsGrades = ["A+","B+","B+","A","A+","A","A+","A+","A+","A+","A+","A+","A+","A+"];
+
+new Chart(document.getElementById('chartDS'), {
+  type: 'bar',
+  data: {
+    labels: dsNames,
+    datasets: [{ data: dsScores, backgroundColor: dsColors, borderRadius: 6, maxBarThickness: 22 }]
+  },
+  options: {
+    indexAxis: 'y',
+    responsive: true,
+    maintainAspectRatio: false,
+    layout: { padding: { top: 20 } },
+    scales: {
+      x: { min: 80, max: 102, ticks: { stepSize: 5 }, border: { display: false }, grid: { color: '#1e293b' } },
+      y: { border: { display: false }, grid: { display: false }, ticks: { font: { size: 11 } } }
+    },
+    plugins: {
+      tooltip: {
+        callbacks: { label: function(ctx) { return ctx.parsed.x + '점 (' + dsGrades[ctx.dataIndex] + ')'; } }
+      }
+    }
+  },
+  plugins: [{
+    id: 'avgLine',
+    afterDraw: function(chart) {
+      var ctx = chart.ctx, xScale = chart.scales.x, yScale = chart.scales.y;
+      var xAvg = xScale.getPixelForValue(95.6);
+      ctx.save(); ctx.setLineDash([6, 4]); ctx.strokeStyle = 'rgba(245,158,11,0.6)'; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(xAvg, yScale.top); ctx.lineTo(xAvg, yScale.bottom); ctx.stroke(); ctx.restore();
+      ctx.save(); ctx.font = "bold 11px 'DM Mono', monospace"; ctx.fillStyle = '#F59E0B'; ctx.textAlign = 'center';
+      ctx.fillText('평균 95.6', xAvg, yScale.top - 6); ctx.restore();
+    }
+  }]
+});
+
+/* ══ CHART 3: Credit Composition ══ */
+new Chart(document.getElementById('chartCredit'), {
+  type: 'bar',
+  data: {
+    labels: labels,
+    datasets: [
+      { label: '교양', data: [10,12,6,3,0,0,3,3], backgroundColor: 'rgba(71,85,105,0.37)' },
+      { label: '경영학', data: [9,6,12,12,6,6,0,0], backgroundColor: '#3B82F6' },
+      { label: 'DS', data: [0,0,0,3,12,12,9,6], backgroundColor: '#10B981', borderRadius: { topLeft: 4, topRight: 4 } },
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      x: { stacked: true, border: { display: false }, grid: { display: false } },
+      y: { stacked: true, border: { display: false } }
+    },
+    plugins: {
+      tooltip: { callbacks: { label: function(ctx) { return ctx.dataset.label + ': ' + ctx.parsed.y + '학점'; } } }
+    }
+  }
+});
+
+/* ══ CHART 4: Grade Comparison ══ */
+new Chart(document.getElementById('chartGrade'), {
+  type: 'bar',
+  data: {
+    labels: ['A+', 'A', 'B+', 'B이하'],
+    datasets: [
+      { label: '경영학', data: [7, 4, 4, 2], backgroundColor: '#3B82F6', borderRadius: 4, maxBarThickness: 40 },
+      { label: 'DS', data: [10, 2, 2, 0], backgroundColor: '#10B981', borderRadius: 4, maxBarThickness: 40 },
+    ]
+  },
+  options: {
+    responsive: true,
+    maintainAspectRatio: false,
+    scales: {
+      x: { border: { display: false }, grid: { display: false } },
+      y: { border: { display: false } }
+    },
+    plugins: {
+      tooltip: { callbacks: { label: function(ctx) { return ctx.dataset.label + ': ' + ctx.parsed.y + '과목'; } } }
+    }
+  }
+});
+
+/* ══ Tabs ══ */
+document.querySelectorAll('.tab-btn').forEach(function(btn) {
+  btn.addEventListener('click', function() {
+    document.querySelectorAll('.tab-btn').forEach(function(b) { b.classList.remove('active'); });
+    document.querySelectorAll('.panel').forEach(function(p) { p.classList.remove('active'); });
+    btn.classList.add('active');
+    document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
+  });
+});
+
+/* ══ KPI Animation ══ */
+document.querySelectorAll('.kpi').forEach(function(card) {
+  var delay = parseInt(card.dataset.delay) || 0;
+  setTimeout(function() {
+    card.classList.add('show');
+    var el = card.querySelector('.kpi-val');
+    var target = parseFloat(el.dataset.target);
+    var dec = el.dataset.dec !== undefined ? parseInt(el.dataset.dec) : 2;
+    var start = Date.now(), dur = 1200;
+    (function anim() {
+      var p = Math.min((Date.now() - start) / dur, 1);
+      var ease = 1 - Math.pow(1 - p, 3);
+      el.textContent = (target * ease).toFixed(dec);
+      if (p < 1) requestAnimationFrame(anim);
+    })();
+  }, delay);
+});
+</script>
+</body>
+</html>
