@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>이영준 — 성적 분석 대시보드</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Noto+Sans+KR:wght@300;400;500;700;900&display=swap" rel="stylesheet" />
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body, #root { width: 100%; min-height: 100vh; background: #0B1120; }
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: #0B1120; }
+  ::-webkit-scrollbar-thumb { background: #1e3a50; border-radius: 3px; }
+</style>
+</head>
+<body>
+<div id="root"><div style="color:#64748B;padding:60px;text-align:center;font-family:sans-serif">로딩 중...</div></div>
+
+<script>
+function loadScript(url) {
+  return new Promise(function(resolve, reject) {
+    var s = document.createElement('script');
+    s.src = url;
+    s.onload = resolve;
+    s.onerror = function() { reject(new Error('Failed to load: ' + url)); };
+    document.head.appendChild(s);
+  });
+}
+
+loadScript('https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js')
+.then(function() { return loadScript('https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js'); })
+.then(function() { return loadScript('https://unpkg.com/recharts@2.12.7/umd/Recharts.js'); })
+.then(function() {
+
+  var h = React.createElement;
+  var useState = React.useState, useEffect = React.useEffect;
+  var RC = Recharts;
+  var ResponsiveContainer = RC.ResponsiveContainer, ComposedChart = RC.ComposedChart,
+      BarChart = RC.BarChart, Line = RC.Line, Bar = RC.Bar, Area = RC.Area,
+      XAxis = RC.XAxis, YAxis = RC.YAxis, CartesianGrid = RC.CartesianGrid,
+      Tooltip = RC.Tooltip, Cell = RC.Cell, ReferenceLine = RC.ReferenceLine;
+
+  var semesterGPA = [
+    { sem:"2019-1", overall:2.57, biz:2.83, ds:null, label:"'19-1" },
+    { sem:"2019-2", overall:3.58, biz:3.50, ds:null, label:"'19-2" },
+    { sem:"2022-1", overall:4.25, biz:4.38, ds:null, label:"'22-1" },
+    { sem:"2022-2", overall:4.41, biz:4.50, ds:4.50, label:"'22-2" },
+    { sem:"2023-1", overall:3.91, biz:4.00, ds:3.75, label:"'23-1" },
+    { sem:"2023-2", overall:4.17, biz:3.75, ds:4.38, label:"'23-2" },
+    { sem:"2025-1", overall:4.50, biz:null, ds:4.50, label:"'25-1" },
+    { sem:"2025-2", overall:4.17, biz:null, ds:4.50, label:"'25-2" },
+  ];
+  var dsCourses = [
+    { name:"고급데이터시각화", score:100, grade:"A+", sem:"2025-2" },
+    { name:"영상데이터분석", score:98, grade:"A+", sem:"2025-2" },
+    { name:"데이터사이언스개론", score:99, grade:"A+", sem:"2025-1" },
+    { name:"캡스톤디자인(DS)I", score:99, grade:"A+", sem:"2025-1" },
+    { name:"시계열데이터분석", score:95, grade:"A+", sem:"2025-1" },
+    { name:"R머신러닝응용", score:100, grade:"A+", sem:"2023-2" },
+    { name:"데이터시각화", score:99, grade:"A+", sem:"2023-2" },
+    { name:"데이터분석기획론", score:95, grade:"A+", sem:"2023-2" },
+    { name:"정보검색과AI학습응용", score:94, grade:"A", sem:"2023-2" },
+    { name:"데이터베이스기초", score:99, grade:"A+", sem:"2023-1" },
+    { name:"데이터분석기초통계", score:91, grade:"A", sem:"2023-1" },
+    { name:"데이터수집과클리닝", score:89, grade:"B+", sem:"2023-1" },
+    { name:"파이썬프로그래밍", score:85, grade:"B+", sem:"2023-1" },
+    { name:"R프로그래밍", score:95, grade:"A+", sem:"2022-2" },
+  ];
+  var creditComp = [
+    { sem:"'19-1", general:10, biz:9, ds:0 },
+    { sem:"'19-2", general:12, biz:6, ds:0 },
+    { sem:"'22-1", general:6, biz:12, ds:0 },
+    { sem:"'22-2", general:3, biz:12, ds:3 },
+    { sem:"'23-1", general:0, biz:6, ds:12 },
+    { sem:"'23-2", general:0, biz:6, ds:12 },
+    { sem:"'25-1", general:3, biz:0, ds:9 },
+    { sem:"'25-2", general:3, biz:0, ds:6 },
+  ];
+  var gradeComp = [
+    { grade:"A+", biz:7, ds:10 },
+    { grade:"A", biz:4, ds:2 },
+    { grade:"B+", biz:4, ds:2 },
+    { grade:"B이하", biz:2, ds:0 },
+  ];
+
+  var C = {
+    bg:"#0B1120", surface:"#111827", surfaceLight:"#1a2332",
+    border:"#1e3a50", text:"#E2E8F0", textMuted:"#64748B", textDim:"#475569",
+    overall:"#94A3B8", biz:"#3B82F6", bizLight:"#60A5FA",
+    ds:"#10B981", dsGlow:"#34D399", dsBright:"#6EE7B7",
+    accent:"#F59E0B", gridLine:"#1e293b",
+  };
+
+  var dsAvg = (dsCourses.reduce(function(s,c){return s+c.score;},0)/dsCourses.length).toFixed(1);
+  var dsAPlus = dsCourses.filter(function(c){return c.grade==="A+";}).length;
+
+  function AnimNum(p) {
+    var s = useState(0), d = s[0], setD = s[1];
+    useEffect(function() {
+      var t = setTimeout(function() {
+        var st = Date.now();
+        (function run() {
+          var pr = Math.min((Date.now()-st)/1200,1);
+          setD(p.value*(1-Math.pow(1-pr,3)));
+          if(pr<1) requestAnimationFrame(run);
+        })();
+      }, p.delay||0);
+      return function(){clearTimeout(t);};
+    },[p.value,p.delay]);
+    return h("span",null,d.toFixed(p.decimals!=null?p.decimals:2));
+  }
+
+  function StatCard(p) {
+    var s=useState(false),v=s[0],setV=s[1];
+    useEffect(function(){var t=setTimeout(function(){setV(true);},p.delay||0);return function(){clearTimeout(t);};},[]);
+    return h("div",{style:{background:"linear-gradient(135deg,"+C.surface+" 0%,"+C.surfaceLight+" 100%)",border:"1px solid "+C.border,borderRadius:16,padding:"24px 20px",position:"relative",overflow:"hidden",opacity:v?1:0,transform:v?"translateY(0)":"translateY(20px)",transition:"all 0.7s cubic-bezier(0.16,1,0.3,1)"}},
+      h("div",{style:{position:"absolute",top:-20,right:-20,width:80,height:80,borderRadius:"50%",background:p.color,opacity:0.06,filter:"blur(20px)"}}),
+      h("div",{style:{fontSize:12,color:C.textMuted,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:8,fontWeight:500}},p.icon?h("span",{style:{marginRight:6}},p.icon):null,p.label),
+      h("div",{style:{fontSize:36,fontWeight:700,color:p.color,lineHeight:1.1,fontFamily:"'DM Mono',monospace"}},h(AnimNum,{value:parseFloat(p.value),decimals:p.value.indexOf(".")>=0?2:0,delay:(p.delay||0)+200})),
+      p.sub?h("div",{style:{fontSize:12,color:C.textDim,marginTop:6}},p.sub):null
+    );
+  }
+
+  function CustomTooltip(p) {
+    if(!p.active||!p.payload||!p.payload.length) return null;
+    return h("div",{style:{background:"rgba(11,17,32,0.95)",border:"1px solid "+C.border,borderRadius:12,padding:"14px 18px",boxShadow:"0 8px 32px rgba(0,0,0,0.4)"}},
+      h("div",{style:{color:C.textMuted,fontSize:11,marginBottom:8,fontWeight:600}},p.label),
+      p.payload.map(function(e,i){return e.value!=null?h("div",{key:i,style:{display:"flex",alignItems:"center",gap:8,marginBottom:4}},
+        h("div",{style:{width:8,height:8,borderRadius:"50%",background:e.color}}),
+        h("span",{style:{color:C.textMuted,fontSize:12}},e.name),
+        h("span",{style:{color:e.color,fontWeight:700,fontSize:14,marginLeft:"auto",fontFamily:"'DM Mono',monospace"}},e.value.toFixed(2))
+      ):null;})
+    );
+  }
+
+  function DSTooltip(p) {
+    if(!p.active||!p.payload||!p.payload.length) return null;
+    var d=p.payload[0].payload;
+    var bc=d.grade==="A+"?C.dsGlow:d.grade==="A"?C.bizLight:C.accent;
+    var bb=d.grade==="A+"?C.ds+"25":d.grade==="A"?C.biz+"20":C.accent+"20";
+    return h("div",{style:{background:"rgba(11,17,32,0.95)",border:"1px solid "+C.border,borderRadius:12,padding:"12px 16px"}},
+      h("div",{style:{fontWeight:700,fontSize:13,color:C.text,marginBottom:4}},d.name),
+      h("div",{style:{fontSize:12,color:C.textMuted}},d.sem),
+      h("div",{style:{marginTop:6,fontFamily:"'DM Mono',monospace"}},
+        h("span",{style:{color:C.ds,fontWeight:700,fontSize:18}},d.score),
+        h("span",{style:{color:C.textMuted}},"점 "),
+        h("span",{style:{display:"inline-block",padding:"2px 8px",borderRadius:4,fontSize:11,fontWeight:700,background:bb,color:bc}},d.grade)
+      )
+    );
+  }
+
+  function CompTooltip(p) {
+    if(!p.active||!p.payload||!p.payload.length) return null;
+    return h("div",{style:{background:"rgba(11,17,32,0.95)",border:"1px solid "+C.border,borderRadius:12,padding:"12px 16px"}},
+      h("div",{style:{color:C.textMuted,fontSize:11,marginBottom:6,fontWeight:600}},p.label),
+      [].concat(p.payload).reverse().map(function(e,i){return h("div",{key:i,style:{display:"flex",alignItems:"center",gap:8,marginBottom:3}},
+        h("div",{style:{width:8,height:8,borderRadius:2,background:e.fill||e.color}}),
+        h("span",{style:{color:C.textMuted,fontSize:12}},e.name),
+        h("span",{style:{color:e.fill||e.color,fontWeight:700,fontFamily:"'DM Mono',monospace",marginLeft:"auto"}},e.value)
+      );})
+    );
+  }
+
+  function makeDot(color,size) {
+    return function(p){return p.value==null?null:h("circle",{cx:p.cx,cy:p.cy,r:size||5,fill:C.bg,stroke:color,strokeWidth:2.5});};
+  }
+
+  function legendDots(items) {
+    return h("div",{style:{display:"flex",gap:16,fontSize:12}},items.map(function(x){
+      return h("div",{key:x.l,style:{display:"flex",alignItems:"center",gap:6}},
+        h("div",{style:{width:x.round?10:12,height:x.round?10:3,borderRadius:x.round?"50%":2,background:x.c}}),
+        h("span",{style:{color:C.textMuted}},x.l)
+      );
+    }));
+  }
+
+  function gradeBars(items) {
+    return items.map(function(x){
+      return h("div",{key:x.grade,style:{marginBottom:12}},
+        h("div",{style:{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:4}},
+          h("span",{style:{color:C.textMuted,fontWeight:500}},x.grade),
+          h("span",{style:{color:x.color,fontWeight:700,fontFamily:"'DM Mono',monospace"}},x.count+"과목")
+        ),
+        h("div",{style:{height:6,background:C.gridLine,borderRadius:3,overflow:"hidden"}},
+          h("div",{style:{width:(x.count/14*100)+"%",height:"100%",background:x.color,borderRadius:3,transition:"width 1s cubic-bezier(0.16,1,0.3,1)"}})
+        )
+      );
+    });
+  }
+
+  function App() {
+    var ts=useState("trend"),tab=ts[0],setTab=ts[1];
+    var ls=useState(false),loaded=ls[0],setLoaded=ls[1];
+    useEffect(function(){setTimeout(function(){setLoaded(true);},100);},[]);
+    var tabs=[{id:"trend",label:"GPA 추이",icon:"📈"},{id:"ds",label:"DS 전공",icon:"🧬"},{id:"composition",label:"구성 분석",icon:"📊"}];
+
+    return h("div",{style:{minHeight:"100vh",background:C.bg,color:C.text,fontFamily:"'Noto Sans KR',sans-serif"}},
+
+      h("div",{style:{padding:"40px 40px 0",maxWidth:1200,margin:"0 auto",opacity:loaded?1:0,transform:loaded?"none":"translateY(-10px)",transition:"all 0.8s cubic-bezier(0.16,1,0.3,1)"}},
+        h("div",{style:{display:"flex",alignItems:"flex-end",justifyContent:"space-between",flexWrap:"wrap",gap:16}},
+          h("div",null,
+            h("div",{style:{fontSize:11,color:C.ds,letterSpacing:"0.15em",fontWeight:600,textTransform:"uppercase",marginBottom:8}},"Academic Performance Dashboard"),
+            h("h1",{style:{fontSize:32,fontWeight:900,margin:0,lineHeight:1.2,background:"linear-gradient(135deg,"+C.text+" 0%,"+C.dsGlow+" 100%)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent"}},"이영준 — 성적 분석 대시보드"),
+            h("div",{style:{fontSize:13,color:C.textMuted,marginTop:6}},"경영학전공 · 데이터사이언스 복수전공  |  총 139학점  |  전체 평점 3.92 / 4.5")
+          ),
+          h("div",{style:{display:"flex",alignItems:"center",gap:6,padding:"6px 14px",background:"rgba(16,185,129,0.1)",border:"1px solid rgba(16,185,129,0.25)",borderRadius:20,fontSize:12,color:C.dsGlow,fontWeight:500}},
+            h("span",{style:{width:6,height:6,borderRadius:"50%",background:C.ds,display:"inline-block"}}),
+            "DS 대학원 포트폴리오"
+          )
+        )
+      ),
+
+      h("div",{style:{padding:"28px 40px 0",maxWidth:1200,margin:"0 auto"}},
+        h("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(180px,1fr))",gap:16}},
+          h(StatCard,{label:"2022 이후 전체",value:"4.23",sub:"/ 4.5 만점",color:C.overall,delay:100,icon:"◈"}),
+          h(StatCard,{label:"경영학 전공",value:"4.25",sub:"2022 이후 평점",color:C.biz,delay:200,icon:"◆"}),
+          h(StatCard,{label:"DS 복수전공",value:"4.29",sub:"복기+복수 평점",color:C.ds,delay:300,icon:"◇"}),
+          h(StatCard,{label:"DS A+ 비율",value:"71",sub:dsAPlus+"/14과목",color:C.accent,delay:400,icon:"★"}),
+          h(StatCard,{label:"DS 평균 점수",value:dsAvg,sub:"백분율 기준",color:C.dsGlow,delay:500,icon:"▣"})
+        )
+      ),
+
+      h("div",{style:{padding:"28px 40px 0",maxWidth:1200,margin:"0 auto"}},
+        h("div",{style:{display:"flex",gap:4,background:C.surface,borderRadius:12,padding:4,border:"1px solid "+C.border,width:"fit-content"}},
+          tabs.map(function(t){var a=tab===t.id;return h("button",{key:t.id,onClick:function(){setTab(t.id);},style:{padding:"10px 20px",borderRadius:8,cursor:"pointer",fontSize:13,fontWeight:600,fontFamily:"'Noto Sans KR',sans-serif",background:a?"linear-gradient(135deg,"+C.ds+"20,"+C.ds+"10)":"transparent",color:a?C.dsGlow:C.textMuted,border:a?"1px solid "+C.ds+"40":"1px solid transparent",transition:"all 0.3s ease"}},t.icon+" "+t.label);})
+        )
+      ),
+
+      h("div",{style:{padding:"20px 40px 40px",maxWidth:1200,margin:"0 auto"}},
+
+        tab==="trend"?h("div",{style:{background:"linear-gradient(180deg,"+C.surface+" 0%,"+C.bg+" 100%)",border:"1px solid "+C.border,borderRadius:20,padding:"32px 24px 16px",position:"relative",overflow:"hidden"}},
+          h("div",{style:{position:"absolute",top:0,left:"25%",right:0,bottom:0,background:"linear-gradient(135deg,transparent 0%,"+C.ds+"03 50%,transparent 100%)"}}),
+          h("div",{style:{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:24,position:"relative",flexWrap:"wrap",gap:12}},
+            h("div",null,h("h2",{style:{margin:0,fontSize:18,fontWeight:700}},"학기별 평점 추이"),h("p",{style:{margin:"4px 0 0",fontSize:12,color:C.textMuted}},"전체 · 경영학 · 데이터사이언스 — 2019-1 ~ 2025-2 (2020~2021 제외)")),
+            legendDots([{c:C.overall,l:"전체"},{c:C.biz,l:"경영학"},{c:C.ds,l:"DS"}])
+          ),
+          h(ResponsiveContainer,{width:"100%",height:380},
+            h(ComposedChart,{data:semesterGPA,margin:{top:20,right:30,left:0,bottom:10}},
+              h("defs",null,h("linearGradient",{id:"dsG",x1:"0",y1:"0",x2:"0",y2:"1"},h("stop",{offset:"0%",stopColor:C.ds,stopOpacity:0.15}),h("stop",{offset:"100%",stopColor:C.ds,stopOpacity:0}))),
+              h(CartesianGrid,{strokeDasharray:"3 3",stroke:C.gridLine,vertical:false}),
+              h(XAxis,{dataKey:"label",tick:{fill:C.textMuted,fontSize:12},axisLine:{stroke:C.gridLine},tickLine:false}),
+              h(YAxis,{domain:[2.0,4.7],tick:{fill:C.textMuted,fontSize:11},axisLine:false,tickLine:false,tickCount:6}),
+              h(Tooltip,{content:h(CustomTooltip)}),
+              h(ReferenceLine,{x:"'22-1",stroke:C.ds,strokeDasharray:"6 4",strokeOpacity:0.4,label:{value:"복수전공 시작 →",position:"insideTopRight",fill:C.ds,fontSize:11,opacity:0.6}}),
+              h(ReferenceLine,{y:4.5,stroke:C.accent,strokeDasharray:"4 4",strokeOpacity:0.2,label:{value:"만점 4.5",position:"insideTopRight",fill:C.accent,fontSize:10,opacity:0.4}}),
+              h(Area,{type:"monotone",dataKey:"ds",fill:"url(#dsG)",stroke:"none",connectNulls:false}),
+              h(Line,{type:"monotone",dataKey:"overall",name:"전체",stroke:C.overall,strokeWidth:2.5,dot:makeDot(C.overall,5),activeDot:{r:7,fill:C.overall},connectNulls:true}),
+              h(Line,{type:"monotone",dataKey:"biz",name:"경영학",stroke:C.biz,strokeWidth:2.5,dot:makeDot(C.biz,5),activeDot:{r:7,fill:C.biz},connectNulls:true}),
+              h(Line,{type:"monotone",dataKey:"ds",name:"DS",stroke:C.ds,strokeWidth:3,dot:makeDot(C.ds,6),activeDot:{r:8,fill:C.ds},connectNulls:false})
+            )
+          ),
+          h("div",{style:{display:"flex",gap:20,justifyContent:"center",marginTop:8,padding:"12px 0",borderTop:"1px solid "+C.border,flexWrap:"wrap"}},
+            [{label:"전체 평점 상승",val:"2.57 → 4.50",color:C.overall},{label:"2022 이후 최저",val:"3.91",color:C.accent},{label:"DS 전공 최고",val:"4.50",color:C.ds}].map(function(x,i){return h("div",{key:i,style:{textAlign:"center",fontSize:11,color:C.textMuted}},x.label+" ",h("span",{style:{color:x.color,fontWeight:700,fontFamily:"'DM Mono',monospace"}},x.val));})
+          )
+        ):null,
+
+        tab==="ds"?h("div",{style:{display:"grid",gridTemplateColumns:"1fr 320px",gap:20}},
+          h("div",{style:{background:C.surface,border:"1px solid "+C.border,borderRadius:20,padding:"32px 16px 16px 8px"}},
+            h("div",{style:{paddingLeft:24,marginBottom:20}},h("h2",{style:{margin:0,fontSize:18,fontWeight:700}},"DS 전공 과목별 성적"),h("p",{style:{margin:"4px 0 0",fontSize:12,color:C.textMuted}},"백분율 점수 기준 · 2022-2 ~ 2025-2")),
+            h(ResponsiveContainer,{width:"100%",height:520},
+              h(BarChart,{data:dsCourses,layout:"vertical",margin:{top:0,right:60,left:20,bottom:0}},
+                h(CartesianGrid,{strokeDasharray:"3 3",stroke:C.gridLine,horizontal:false}),
+                h(XAxis,{type:"number",domain:[80,102],tick:{fill:C.textMuted,fontSize:10},axisLine:false,tickLine:false}),
+                h(YAxis,{type:"category",dataKey:"name",tick:{fill:C.textMuted,fontSize:11},axisLine:false,tickLine:false,width:130}),
+                h(Tooltip,{content:h(DSTooltip)}),
+                h(ReferenceLine,{x:parseFloat(dsAvg),stroke:C.accent,strokeDasharray:"6 4",strokeOpacity:0.6,label:{value:"평균 "+dsAvg,position:"top",fill:C.accent,fontSize:11}}),
+                h(Bar,{dataKey:"score",radius:[0,6,6,0],maxBarSize:22},
+                  dsCourses.map(function(c,i){var f=c.score>=98?C.ds:c.score>=94?C.dsGlow:c.score>=90?C.dsBright+"BB":C.dsBright+"77";return h(Cell,{key:i,fill:f});})
+                )
+              )
+            )
+          ),
+          h("div",{style:{display:"flex",flexDirection:"column",gap:16}},
+            h("div",{style:{background:C.surface,border:"1px solid "+C.border,borderRadius:20,padding:24,textAlign:"center"}},
+              h("div",{style:{fontSize:12,color:C.textMuted,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:12}},"DS 전공 누적 평점"),
+              h("div",{style:{position:"relative",width:160,height:100,margin:"0 auto"}},
+                h("svg",{width:160,height:100,viewBox:"0 0 160 100"},
+                  h("defs",null,h("linearGradient",{id:"gg",x1:"0",y1:"0",x2:"1",y2:"0"},h("stop",{offset:"0%",stopColor:C.biz}),h("stop",{offset:"100%",stopColor:C.ds}))),
+                  h("path",{d:"M 15 90 A 65 65 0 0 1 145 90",fill:"none",stroke:C.gridLine,strokeWidth:10,strokeLinecap:"round"}),
+                  h("path",{d:"M 15 90 A 65 65 0 0 1 145 90",fill:"none",stroke:"url(#gg)",strokeWidth:10,strokeLinecap:"round",strokeDasharray:(4.29/4.5*204).toFixed(1)+" 204"})
+                ),
+                h("div",{style:{position:"absolute",bottom:0,left:"50%",transform:"translateX(-50%)",textAlign:"center"}},
+                  h("div",{style:{fontSize:32,fontWeight:900,color:C.ds,fontFamily:"'DM Mono',monospace",lineHeight:1}},"4.29"),
+                  h("div",{style:{fontSize:11,color:C.textMuted}},"/ 4.5")
+                )
+              )
+            ),
+            h("div",{style:{background:C.surface,border:"1px solid "+C.border,borderRadius:20,padding:24}},
+              h("div",{style:{fontSize:12,color:C.textMuted,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:16}},"성적 등급 분포"),
+              gradeBars([{grade:"A+",count:10,color:C.ds},{grade:"A",count:2,color:C.dsGlow},{grade:"B+",count:2,color:C.dsBright}])
+            ),
+            h("div",{style:{background:"linear-gradient(135deg,"+C.ds+"10,"+C.ds+"05)",border:"1px solid "+C.ds+"30",borderRadius:20,padding:24}},
+              h("div",{style:{fontSize:12,color:C.ds,letterSpacing:"0.08em",textTransform:"uppercase",marginBottom:12,fontWeight:600}},"✦ Key Highlights"),
+              ["14과목 중 10과목 A+ 취득","100점 만점 과목 3개","평균 백분율 95.6점","전 학기 평점 3.75 이상 유지"].map(function(t,i){return h("div",{key:i,style:{fontSize:13,color:C.text,marginBottom:8,display:"flex",alignItems:"center",gap:8}},h("span",{style:{color:C.ds,fontSize:8}},"●"),t);})
+            )
+          )
+        ):null,
+
+        tab==="composition"?h("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr",gap:20}},
+          h("div",{style:{background:C.surface,border:"1px solid "+C.border,borderRadius:20,padding:"32px 16px 16px 8px"}},
+            h("div",{style:{paddingLeft:24,marginBottom:16}},h("h2",{style:{margin:0,fontSize:18,fontWeight:700}},"학기별 수강 학점 구성"),h("p",{style:{margin:"4px 0 0",fontSize:12,color:C.textMuted}},"교양 → 경영학 → DS 전공으로 비중 전환")),
+            h(ResponsiveContainer,{width:"100%",height:340},
+              h(BarChart,{data:creditComp,margin:{top:10,right:20,left:0,bottom:0}},
+                h(CartesianGrid,{strokeDasharray:"3 3",stroke:C.gridLine,vertical:false}),
+                h(XAxis,{dataKey:"sem",tick:{fill:C.textMuted,fontSize:11},axisLine:false,tickLine:false}),
+                h(YAxis,{tick:{fill:C.textMuted,fontSize:11},axisLine:false,tickLine:false}),
+                h(Tooltip,{content:h(CompTooltip)}),
+                h(Bar,{dataKey:"general",name:"교양",stackId:"a",fill:C.textDim+"60"}),
+                h(Bar,{dataKey:"biz",name:"경영학",stackId:"a",fill:C.biz}),
+                h(Bar,{dataKey:"ds",name:"DS",stackId:"a",fill:C.ds,radius:[4,4,0,0]})
+              )
+            ),
+            h("div",{style:{display:"flex",gap:16,justifyContent:"center",padding:"12px 0 0",borderTop:"1px solid "+C.border,marginTop:8}},legendDots([{c:C.textDim+"60",l:"교양",round:true},{c:C.biz,l:"경영학",round:true},{c:C.ds,l:"DS",round:true}]))
+          ),
+          h("div",{style:{background:C.surface,border:"1px solid "+C.border,borderRadius:20,padding:"32px 20px 16px"}},
+            h("div",{style:{marginBottom:16}},h("h2",{style:{margin:0,fontSize:18,fontWeight:700}},"전공별 성적 등급 비교"),h("p",{style:{margin:"4px 0 0",fontSize:12,color:C.textMuted}},"경영학 vs 데이터사이언스")),
+            h(ResponsiveContainer,{width:"100%",height:340},
+              h(BarChart,{data:gradeComp,margin:{top:10,right:20,left:0,bottom:0}},
+                h(CartesianGrid,{strokeDasharray:"3 3",stroke:C.gridLine,vertical:false}),
+                h(XAxis,{dataKey:"grade",tick:{fill:C.textMuted,fontSize:12},axisLine:false,tickLine:false}),
+                h(YAxis,{tick:{fill:C.textMuted,fontSize:11},axisLine:false,tickLine:false}),
+                h(Tooltip,{content:h(CompTooltip)}),
+                h(Bar,{dataKey:"biz",name:"경영학",fill:C.biz,radius:[4,4,0,0],maxBarSize:40}),
+                h(Bar,{dataKey:"ds",name:"DS",fill:C.ds,radius:[4,4,0,0],maxBarSize:40})
+              )
+            ),
+            h("div",{style:{display:"flex",gap:16,justifyContent:"center",padding:"12px 0 0",borderTop:"1px solid "+C.border,marginTop:8}},legendDots([{c:C.biz,l:"경영학 (17과목)",round:true},{c:C.ds,l:"DS (14과목)",round:true}]))
+          ),
+          h("div",{style:{gridColumn:"1 / -1",background:"linear-gradient(135deg,"+C.surface+" 0%,"+C.ds+"08 100%)",border:"1px solid "+C.border,borderRadius:20,padding:"28px 32px",display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:32}},
+            [{label:"전체 이수학점",val:"139",sub:"졸업기준 130학점",color:C.text},{label:"전체 평점평균",val:"3.92",sub:"백분율 93.3%",color:C.overall},{label:"경영학 전공",val:"3.94",sub:"전기+전선 57학점",color:C.biz},{label:"DS 복수전공",val:"4.28",sub:"복기+복수 42학점",color:C.ds}].map(function(x,i){return h("div",{key:i,style:{textAlign:"center"}},
+              h("div",{style:{fontSize:11,color:C.textMuted,textTransform:"uppercase",letterSpacing:"0.08em",marginBottom:6}},x.label),
+              h("div",{style:{fontSize:28,fontWeight:900,color:x.color,fontFamily:"'DM Mono',monospace"}},x.val),
+              h("div",{style:{fontSize:11,color:C.textDim}},x.sub)
+            );})
+          )
+        ):null
+      ),
+
+      h("div",{style:{textAlign:"center",padding:"16px 40px 32px",fontSize:11,color:C.textDim}},"이영준 · 한세대학교 글로벌경영학부 경영학전공 / 데이터사이언스 복수전공  ·  2026.02 기준")
+    );
+  }
+
+  ReactDOM.render(h(App), document.getElementById("root"));
+})
+.catch(function(err) {
+  document.getElementById("root").innerHTML = '<div style="color:#EF4444;padding:60px;text-align:center;font-family:monospace;background:#0B1120;min-height:100vh;display:flex;align-items:center;justify-content:center;">로딩 실패: ' + err.message + '</div>';
+});
+</script>
+</body>
+</html>
